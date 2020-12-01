@@ -1,0 +1,56 @@
+schemaVersion: '0.3'
+description: |
+  ### Document Name - AFSBP-Autoscaling1Remediation
+
+  ## What does this document do?
+  This document enables ELB healthcheck on a given AutoScaling Group using the [UpdateAutoScalingGroup] API.
+
+  ## Input Parameters
+  * AsgName: (Required) AutoScaling group name that needs to be modified
+  * HealthCheckGracePeriod: (Optional) Health check grace period when ELB health check is Enabled
+  Default: 30 seconds
+  * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+
+  ## Output Parameters
+  * EnableELBHealthCheck.Response - The standard HTTP response from the UpdateAutoScalingGroup API.
+
+assumeRole: "{{ AutomationAssumeRole }}"
+outputs:
+  - EnableELBHealthCheck.Response
+parameters:
+  AsgName:
+    type: String
+    description: Name of the AutoScalingGroup
+  HealthCheckGracePeriod:
+    type: Integer
+    default: 30
+    description: ELB Health Check Grace Period
+  AutomationAssumeRole:
+    type: String
+    description: (Optional) The ARN of the role that allows Automation to perform the actions on your behalf.
+    default: ""
+mainSteps:
+  - name: EnableELBHealthCheck
+    action: 'aws:executeAwsApi'
+    inputs:
+      Service: autoscaling
+      Api: UpdateAutoScalingGroup
+      AutoScalingGroupName: '{{AsgName}}'
+      HealthCheckType: ELB
+      HealthCheckGracePeriod: '{{HealthCheckGracePeriod}}'
+    description: Enable ELB health check type on ASG
+    outputs:
+      - Name: Response
+        Selector: $
+        Type: StringMap
+  - name: VerifyAsgHealthCheckType
+    action: 'aws:assertAwsResourceProperty'
+    inputs:
+      Service: autoscaling
+      Api: DescribeAutoScalingGroups
+      PropertySelector: '$.AutoScalingGroups[0].HealthCheckType'
+      DesiredValues:
+        - ELB
+      AutoScalingGroupNames:
+        - '{{AsgName}}'
+    description: Check ASG Health check type

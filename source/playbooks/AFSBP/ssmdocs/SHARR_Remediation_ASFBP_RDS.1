@@ -1,0 +1,71 @@
+description: |
+  ### Document Name - SHARR_Remediation_ASFBP_RDS.1
+  ## What does this document do?
+  This document chages public RDS snapshot to private
+
+  ## Input Parameters
+  * Finding: (Required) Security Hub finding details JSON
+  * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+schemaVersion: '0.3'
+assumeRole: '{{ AutomationAssumeRole }}'
+parameters:
+  Finding:
+    type: StringMap
+    description: The input from Step function for RDS.1 finding
+  AutomationAssumeRole:
+    type: String
+    description: (Optional) The ARN of the role that allows Automation to perform the actions on your behalf.
+    default: ""
+mainSteps:
+  - name: ParseInput
+    action: 'aws:executeScript'
+    outputs:
+      - Name: DBSnapshotIdentifier
+        Selector: $.Payload.db_snapshot_identifier
+        Type: String
+      - Name: FindingId
+        Selector: $.Payload.finding_id
+        Type: String
+      - Name: ProductArn
+        Selector: $.Payload.product_arn
+        Type: String
+    inputs:
+      InputPayload:
+        Finding: '{{Finding}}'
+      Runtime: python3.6
+      Handler: parse_event
+      Script: |-
+        def parse_event(event, context):
+          finding = event['Finding']
+          finding_id = finding['FindingId']
+          product_arn = finding['ProductArn']
+          db_snapshot_identifier = finding['Resources'][0]['Details']['AwsRdsDbSnapshot']['DbSnapshotIdentifier']
+          return {"db_snapshot_identifier": db_snapshot_identifier, "finding_id": finding_id, "product_arn": product_arn}
+    isEnd: false
+  - name: MakeRdsSnapshotPrivate
+    action: 'aws:executeAwsApi'
+    outputs:
+      - Name: Response
+        Selector: $
+        Type: StringMap
+    inputs:
+      Service: rds
+      Api: ModifyDBSnapshotAttribute
+      DBSnapshotIdentifier: '{{ParseInput.DBSnapshotIdentifier}}'
+      AttributeName: restore
+      ValuesToRemove:
+        - all
+    description: Make RDS Snapshot private by running ModifyDBSnapshotAttribute API
+  - name: UpdateFinding
+    action: 'aws:executeAwsApi'
+    inputs:
+      Service: securityhub
+      Api: BatchUpdateFindings
+      FindingIdentifiers:
+      - Id: '{{ParseInput.FindingId}}'
+        ProductArn: '{{ParseInput.ProductArn}}'
+      Note:
+        Text: 'RDS DB Snapshot modified to private'
+        UpdatedBy: 'SHARR_Remediation_ASFBP_RDS.1'
+    description: Update finding
+    isEnd: true

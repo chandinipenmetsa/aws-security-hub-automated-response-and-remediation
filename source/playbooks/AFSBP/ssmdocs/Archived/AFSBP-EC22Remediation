@@ -1,0 +1,59 @@
+schemaVersion: '0.3'
+description: |
+  ### Document Name - AFSBP-EC22Remediation
+
+  ## What does this document do?
+  This document deletes ingress and egress rules on a Security Group using [RevokeSecurityGroupIngress,RevokeSecurityGroupEgress] APIs.
+
+  ## Input Parameters
+  * ApplyImmediately: (Optional) A value that indicates whether the modifications in this request and any pending modifications
+    are asynchronously applied as soon as possible, regardless of the PreferredMaintenanceWindow setting for the DB instance.
+    * Default: "false"
+  * GroupId: (Required) Security Group ID on which ingress and egress rules should be revoked
+  * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  GroupId:
+    type: String
+    description: (Required) Security Group ID
+    allowedPattern: ^([s][g]\-)([0-9a-f]){1,}$
+  AutomationAssumeRole:
+    type: String
+    description: (Optional) The ARN of the role that allows Automation to perform the actions on your behalf.
+    default: ""
+mainSteps:
+  - name: DescribeSecurityGroups
+    action: 'aws:executeAwsApi'
+    inputs:
+      Service: ec2
+      Api: DescribeSecurityGroups
+      GroupIds:
+        - "{{ GroupId }}"
+    outputs:
+      - Name: Ingress
+        Selector: $.SecurityGroups[0].IpPermissions
+        Type: MapList
+      - Name: Egress
+        Selector: $.SecurityGroups[0].IpPermissionsEgress
+        Type: MapList
+    description: Describe SecurityGroups
+    isEnd: false
+  - name: RevokeIngress
+    action: "aws:executeAwsApi"
+    inputs:
+      Service: ec2
+      Api: RevokeSecurityGroupIngress
+      GroupId: "{{GroupId}}"
+      IpPermissions: "{{DescribeSecurityGroups.Ingress}}"
+    description: Revoke Ingress permissions
+    isEnd: false
+  - name: RevokeEgress
+    action: "aws:executeAwsApi"
+    inputs:
+      Service: ec2
+      Api: RevokeSecurityGroupEgress
+      GroupId: "{{GroupId}}"
+      IpPermissions: "{{DescribeSecurityGroups.Egress}}"
+    description: Revoke Egress permissions
+    isEnd: true

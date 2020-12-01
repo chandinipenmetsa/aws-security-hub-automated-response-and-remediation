@@ -1,0 +1,68 @@
+schemaVersion: "0.3"
+description: |
+  ### Document Name - AFSBP-RDS7Remediation
+
+  ## What does this document do?
+  This document enables `Deletion Protection` on a given Amazon RDS cluster using the [ModifyDBCluster] API.
+
+  ## Input Parameters
+  * ApplyImmediately: (Optional) A value that indicates whether the modifications in this request and any pending modifications
+    are asynchronously applied as soon as possible, regardless of the PreferredMaintenanceWindow setting for the DB instance.
+    * Default: "false"
+  * DbClusterIdentifier: (Required) Amazon RDS Cluster identifier for which deletion protection needs to be enabled.
+  * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+
+  ## Output Parameters
+  * EnableRDSClusterDeletionProtection.ModifyDBClusterResponse - The standard HTTP response from the ModifyDBInstance API.
+
+assumeRole: "{{ AutomationAssumeRole }}"
+parameters:
+  ApplyImmediately:
+    type: Boolean
+    description: (Optional) A value that indicates whether the modifications in this request and any pending modifications are asynchronously applied as soon as possible, regardless of the PreferredMaintenanceWindow setting for the DB instance.
+    default: false
+  AutomationAssumeRole:
+    type: String
+    description: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+    allowedPattern: ^arn:(aws[a-zA-Z-]*)?:iam::\d{12}:role/[\w+=,.@-]+
+  DbClusterIdentifier:
+    type: String
+    description: (Required) DB Cluster Identifier of the Amazon RDS cluster for which deletion protection needs to be enabled.
+outputs:
+  - EnableRDSClusterDeletionProtection.ModifyDBClusterResponse
+mainSteps:
+  -
+    name: EnableRDSClusterDeletionProtection
+    action: "aws:executeAwsApi"
+    description: |
+      ## EnableRDSClusterDeletionProtection
+      Makes ModifyDBCluster API call to enable deletion protection on the Amazon RDS Cluster using the DbClusterIdentifier.
+      ## Outputs
+      * DbCluster: The standard HTTP response from the ModifyDBCluster API.
+    timeoutSeconds: 600
+    isEnd: false
+    inputs:
+      Service: rds
+      Api: ModifyDBCluster
+      ApplyImmediately: "{{ ApplyImmediately }}"
+      DBClusterIdentifier: "{{ DbClusterIdentifier }}"
+      DeletionProtection: True
+    outputs:
+      - Name: ModifyDBClusterResponse
+        Selector: $
+        Type: StringMap
+  -
+    name: VerifyDBInstanceModification
+    action: "aws:assertAwsResourceProperty"
+    timeoutSeconds: 600
+    isEnd: true
+    description: |
+      ## VerifyDBInstanceModification
+      Checks whether deletion protection is enabled on Amazon RDS Cluster.
+    inputs:
+      Service: rds
+      Api: DescribeDBClusters
+      DBClusterIdentifier: "{{ DbClusterIdentifier }}"
+      PropertySelector: "$.DBClusters[0].DeletionProtection"
+      DesiredValues:
+        - "True"
