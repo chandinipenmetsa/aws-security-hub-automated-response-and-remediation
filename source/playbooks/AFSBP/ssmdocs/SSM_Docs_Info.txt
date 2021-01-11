@@ -1,0 +1,37 @@
++---+------------------+---------------------------------------+--------------------------+-------------------------------------+
+| # | AFSBP Control ID | SSM Doc name                          | Inputs                   | Outputs                             |
++---+------------------+---------------------------------------+--------------------------+-------------------------------------+
+| 1 | AutoScaling.1    | SHARR_Remediation_ASFBP_AutoScaling.1 | •Finding                 | VerifyASGHealthCheck.Response       |
+|   |                  |                                       | •HealthCheckGracePeriod  | Ex:                                 |
+|   |                  |                                       |                          | {                                   |
+|   |                  |                                       |   (default 30 sec)       | "status": "Autoscaling Group        |
+|   |                  |                                       | •AutomationAssumeRole    |                                     |
+|   |                  |                                       |                          | health check type is not ELB",      |
+|   |                  |                                       |                          | "output": json.dumps(               |
+|   |                  |                                       |                          | desc_asg['AutoScalingGroups'][0],   |
+|   |                  |                                       |                          |                                     |
+|   |                  |                                       |                          | default=str)                        |
+|   |                  |                                       |                          | }                                   |
++---+------------------+---------------------------------------+--------------------------+-------------------------------------+
+| 2 | EC2.2            | SHARR_Remediation_AFSBP_EC2.2         | •Finding                 | RemoveRules.Output                  |
+|   |                  |                                       | •AutomationAssumeRole    | (Output from AWSConfigRemediation-  |
+|   |                  |                                       |                          | RemoveVPCDefaultSecurityGroupRules  |
+|   |                  |                                       |                          | SSM doc)                            |
+|   |                  |                                       |                          | Ex:                                 |
+|   |                  |                                       |                          | Security group closed successfully. |
++---+------------------+---------------------------------------+--------------------------+-------------------------------------+
+| 3 | RDS.1            | SHARR_Remediation_AFSBP_RDS.1         | •Finding                 | MakeRdsSnapshotPrivate.Response     |
+|   |                  |                                       | •AutomationAssumeRole    | (ModifyDBSnapshotAttribute API      |
+|   |                  |                                       |                          | call output)                        |
++---+------------------+---------------------------------------+--------------------------+-------------------------------------+
+| 4 | RDS.6            | SHARR_Remediation_ASFBP_RDS.6         | •Finding                 | EnableEnhancedMonitoring.Output     |
+|   |                  |                                       | •AutomationAssumeRole    | (ModifyDBInstance API call output   |
+|   |                  |                                       |                          | from another SSM doc)               |
++---+------------------+---------------------------------------+--------------------------+-------------------------------------+
+| 5 | RDS.7            | SHARR_Remediation_AFSBP_RDS.7         | •Finding                 | EnableRDSClusterDeletion            |
+|   |                  |                                       | •AutomationAssumeRole    | Protection.Output                   |
+|   |                  |                                       |                          |                                     |
+|   |                  |                                       |                          | (ModifyDBCluster API call output    |
+|   |                  |                                       |                          |                                     |
+|   |                  |                                       |                          | from another SSM doc)               |
++---+------------------+---------------------------------------+--------------------------+-------------------------------------+
