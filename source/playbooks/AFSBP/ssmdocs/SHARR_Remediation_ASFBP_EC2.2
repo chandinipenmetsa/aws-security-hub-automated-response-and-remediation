@@ -1,25 +1,30 @@
 description: |
-  ### Document Name - SHARR_Remediation_ASFBP_EC2.2
+  ### Document Name - SHARR_Remediation_ASFBP_EC@.2
+
   ## What does this document do?
-  This document deletes ingress and egress rules on a Security Group using [RevokeSecurityGroupIngress,RevokeSecurityGroupEgress] APIs.
+  This document deleted ingress and egress rulesfrom default security group
 
   ## Input Parameters
   * Finding: (Required) Security Hub finding details JSON
   * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
-schemaVersion: '0.3'
-assumeRole: '{{ AutomationAssumeRole }}'
-outputs:
-  - VerifySGRules.Response
+
+  ## Output Parameters
+  * RemoveRules.Output - Output from AWSConfigRemediation-RemoveVPCDefaultSecurityGroupRules SSM doc
+schemaVersion: "0.3"
+assumeRole: "{{ AutomationAssumeRole }}"
 parameters:
-  Finding:
-    type: StringMap
-    description: The input from Step function for EC22 finding
   AutomationAssumeRole:
     type: String
-    description: (Optional) The ARN of the role that allows Automation to perform the actions on your behalf.
-    default: ''
+    description: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+    allowedPattern: ^arn:(aws[a-zA-Z-]*)?:iam::\d{12}:role/[\w+=,.@-]+
+  Finding:
+    type: StringMap
+    description: The input from Step function for EC2.2 finding
+outputs:
+  - RemoveRules.Output
 mainSteps:
-  - name: ParseInput
+  -
+    name: ParseInput
     action: 'aws:executeScript'
     outputs:
       - Name: GroupId
@@ -44,95 +49,26 @@ mainSteps:
           group_id = finding['Resources'][0]['Details']['AwsEc2SecurityGroup']['GroupId']
           return {"group_id": group_id, "finding_id": finding_id, "product_arn": product_arn}
     isEnd: false
-  - name: DescribeSecurityGroups
-    action: 'aws:executeAwsApi'
-    inputs:
-      Service: ec2
-      Api: DescribeSecurityGroups
-      GroupIds:
-        - '{{ ParseInput.GroupId }}'
-    outputs:
-      - Name: Ingress
-        Selector: '$.SecurityGroups[0].IpPermissions'
-        Type: MapList
-      - Name: Egress
-        Selector: '$.SecurityGroups[0].IpPermissionsEgress'
-        Type: MapList
-    description: Describe SecurityGroups
+  -
+    name: RemoveRules
+    action: 'aws:executeAutomation'
     isEnd: false
-  - name: RevokeIngress
-    action: 'aws:executeAwsApi'
     inputs:
-      Service: ec2
-      Api: RevokeSecurityGroupIngress
-      GroupId: '{{ ParseInput.GroupId }}'
-      IpPermissions: '{{DescribeSecurityGroups.Ingress}}'
-    description: Revoke Ingress permissions
-    onFailure: Continue
-    isEnd: false
-  - name: RevokeEgress
-    action: 'aws:executeAwsApi'
-    inputs:
-      Service: ec2
-      Api: RevokeSecurityGroupEgress
-      GroupId: '{{ ParseInput.GroupId }}'
-      IpPermissions: '{{DescribeSecurityGroups.Egress}}'
-    description: Revoke Egress permissions
-    onFailure: Continue
-    isEnd: false
-  - name: VerifySGRules
-    action: 'aws:executeScript'
-    outputs:
-      - Name: Response
-        Selector: $.Payload.response
-        Type: StringMap
-    inputs:
-      InputPayload:
+      DocumentName: AWSConfigRemediation-RemoveVPCDefaultSecurityGroupRules
+      RuntimeParameters:
         GroupId: '{{ ParseInput.GroupId }}'
-      Runtime: python3.6
-      Handler: verify
-      Script: |-
-        import boto3
-        from botocore.exceptions import ClientError
-        def verify(event, context):
-          ec2_client = boto3.client('ec2')
-          group_id = event['GroupId']
-          try:
-            desc_group = ec2_client.describe_security_groups(GroupIds=[group_id])
-            ingress = desc_group['SecurityGroups'][0]['IpPermissions']
-            egress = desc_group['SecurityGroups'][0]['IpPermissionsEgress']
-            if (ingress or egress):
-              return {
-                "response": {
-                  "status": "Security group ingress and egress rule deletion failed",
-                  "output": desc_group['SecurityGroups'][0]
-                }
-              }
-            else:
-              return {
-                "response": {
-                  "status": "Successfully revoked Security group ingress and egress rules",
-                  "output": desc_group['SecurityGroups'][0]
-                }
-              }
-          except Exception as e:
-            return {
-              "response": {
-                "status": "Exception while describing security group",
-                "output": e
-              }
-            }
-    isEnd: false
-  - name: UpdateFinding
+        AutomationAssumeRole: '{{ AutomationAssumeRole }}'
+  - 
+    name: UpdateFinding
     action: 'aws:executeAwsApi'
     inputs:
       Service: securityhub
       Api: BatchUpdateFindings
       FindingIdentifiers:
-        - Id: '{{ParseInput.FindingId}}'
-          ProductArn: '{{ParseInput.ProductArn}}'
+      - Id: '{{ParseInput.FindingId}}'
+        ProductArn: '{{ParseInput.ProductArn}}'
       Note:
-        Text: Default security group ingress and egress rules removed
-        UpdatedBy: SHARR_Remediation_ASFBP_EC2.2
+        Text: 'Removed rules on default security group'
+        UpdatedBy: 'SHARR_Remediation_ASFBP_EC2.2'
     description: Update finding
     isEnd: true

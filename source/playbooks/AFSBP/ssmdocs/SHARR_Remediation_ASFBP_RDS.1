@@ -16,6 +16,8 @@ parameters:
     type: String
     description: (Optional) The ARN of the role that allows Automation to perform the actions on your behalf.
     default: ""
+outputs:
+  - MakeRdsSnapshotPrivate.Response
 mainSteps:
   - name: ParseInput
     action: 'aws:executeScript'
