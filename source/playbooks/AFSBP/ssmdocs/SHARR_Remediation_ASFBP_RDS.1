@@ -18,6 +18,7 @@ parameters:
     default: ""
 outputs:
   - MakeRdsSnapshotPrivate.Response
+  - ParseInput.AffectedObject
 mainSteps:
   - name: ParseInput
     action: 'aws:executeScript'
@@ -31,6 +32,9 @@ mainSteps:
       - Name: ProductArn
         Selector: $.Payload.product_arn
         Type: String
+      - Name: AffectedObject
+        Selector: $.Payload.object
+        Type: StringMap
     inputs:
       InputPayload:
         Finding: '{{Finding}}'
@@ -42,7 +46,8 @@ mainSteps:
           finding_id = finding['FindingId']
           product_arn = finding['ProductArn']
           db_snapshot_identifier = finding['Resources'][0]['Details']['AwsRdsDbSnapshot']['DbSnapshotIdentifier']
-          return {"db_snapshot_identifier": db_snapshot_identifier, "finding_id": finding_id, "product_arn": product_arn}
+          object = {'Type': 'RDSSnapshot', 'Id': db_snapshot_identifier, 'OutputKey': 'MakeRdsSnapshotPrivate.Response'}
+          return {"db_snapshot_identifier": db_snapshot_identifier, "finding_id": finding_id, "product_arn": product_arn, "object": object}
     isEnd: false
   - name: MakeRdsSnapshotPrivate
     action: 'aws:executeAwsApi'

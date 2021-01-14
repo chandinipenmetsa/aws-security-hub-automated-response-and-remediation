@@ -22,6 +22,7 @@ parameters:
     description: The input from Step function for RDS7 finding
 outputs:
   - EnableEnhancedMonitoring.Output
+  - ParseInput.AffectedObject
 mainSteps:
   -
     name: ParseInput
@@ -36,6 +37,9 @@ mainSteps:
       - Name: ProductArn
         Selector: $.Payload.product_arn
         Type: String
+      - Name: AffectedObject
+        Selector: $.Payload.object
+        Type: StringMap
     inputs:
       InputPayload:
         Finding: '{{Finding}}'
@@ -47,7 +51,8 @@ mainSteps:
           finding_id = finding['FindingId']
           product_arn = finding['ProductArn']
           resource_id = finding['Resources'][0]['Details']['AwsRdsDbInstance']['DbiResourceId']
-          return {"resource_id": resource_id, "finding_id": finding_id, "product_arn": product_arn}
+          object = {'Type': 'RDSDBInstance', 'Id': resource_id, 'OutputKey': 'EnableEnhancedMonitoring.Output'}
+          return {"resource_id": resource_id, "finding_id": finding_id, "product_arn": product_arn, "object": object}
     isEnd: false
   - 
     name: GetMonitoringRoleArn
