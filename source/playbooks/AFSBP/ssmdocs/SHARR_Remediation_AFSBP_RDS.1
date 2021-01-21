@@ -8,6 +8,10 @@ description: |
   * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
 schemaVersion: '0.3'
 assumeRole: '{{ AutomationAssumeRole }}'
+outputs:
+  - MakeRdsSnapshotPrivate.Response
+  - MakeRdsClusterSnapshotPrivate.Response
+  - ParseInput.AffectedObject
 parameters:
   Finding:
     type: StringMap
@@ -15,10 +19,7 @@ parameters:
   AutomationAssumeRole:
     type: String
     description: (Optional) The ARN of the role that allows Automation to perform the actions on your behalf.
-    default: ""
-outputs:
-  - MakeRdsSnapshotPrivate.Response
-  - ParseInput.AffectedObject
+    default: ''
 mainSteps:
   - name: ParseInput
     action: 'aws:executeScript'
@@ -35,6 +36,9 @@ mainSteps:
       - Name: AffectedObject
         Selector: $.Payload.object
         Type: StringMap
+      - Name: Type
+        Selector: $.Payload.type
+        Type: String
     inputs:
       InputPayload:
         Finding: '{{Finding}}'
@@ -45,10 +49,29 @@ mainSteps:
           finding = event['Finding']
           finding_id = finding['Id']
           product_arn = finding['ProductArn']
-          db_snapshot_identifier = finding['Resources'][0]['Details']['AwsRdsDbSnapshot']['DbSnapshotIdentifier']
-          object = {'Type': 'RDSSnapshot', 'Id': db_snapshot_identifier, 'OutputKey': 'MakeRdsSnapshotPrivate.Response'}
-          return {"db_snapshot_identifier": db_snapshot_identifier, "finding_id": finding_id, "product_arn": product_arn, "object": object}
-    isEnd: false
+          resource_type = finding['Resources'][0]['Type']
+          object = {'Type': resource_type}
+          if (resource_type == 'AwsRdsDbSnapshot'):
+            db_snapshot_identifier = finding['Resources'][0]['Details']['AwsRdsDbSnapshot']['DbSnapshotIdentifier']
+            object['OutputKey'] = 'MakeRdsSnapshotPrivate.Response'
+            object['Id'] = db_snapshot_identifier
+          elif (resource_type == 'AwsRdsDbClusterSnapshot'):
+            db_snapshot_identifier = finding['Resources'][0]['Id'].split(':')[-1]
+            object['OutputKey'] = 'MakeRdsClusterSnapshotPrivate.Response'
+            object['Id'] = db_snapshot_identifier
+          return {"type": resource_type, "db_snapshot_identifier": db_snapshot_identifier, "finding_id": finding_id, "product_arn": product_arn, "object": object}
+    nextStep: ChooseNextStep
+  - name: ChooseNextStep
+    action: 'aws:branch'
+    inputs:
+      Choices:
+        - NextStep: MakeRdsSnapshotPrivate
+          Variable: '{{ParseInput.Type}}'
+          StringEquals: AwsRdsDbSnapshot
+        - NextStep: MakeRdsClusterSnapshotPrivate
+          Variable: '{{ParseInput.Type}}'
+          StringEquals: AwsRdsDbClusterSnapshot
+      Default: MakeRdsSnapshotPrivate
   - name: MakeRdsSnapshotPrivate
     action: 'aws:executeAwsApi'
     outputs:
@@ -63,16 +86,32 @@ mainSteps:
       ValuesToRemove:
         - all
     description: Make RDS Snapshot private by running ModifyDBSnapshotAttribute API
+    nextStep: UpdateFinding
+  - name: MakeRdsClusterSnapshotPrivate
+    action: 'aws:executeAwsApi'
+    outputs:
+      - Name: Response
+        Selector: $
+        Type: StringMap
+    inputs:
+      Service: rds
+      Api: ModifyDBClusterSnapshotAttribute
+      DBClusterSnapshotIdentifier: '{{ParseInput.DBSnapshotIdentifier}}'
+      AttributeName: restore
+      ValuesToRemove:
+        - all
+    description: Make RDS Cluster Snapshot private by running ModifyDBClusterSnapshotAttribute API
+    nextStep: UpdateFinding
   - name: UpdateFinding
     action: 'aws:executeAwsApi'
     inputs:
       Service: securityhub
       Api: BatchUpdateFindings
       FindingIdentifiers:
-      - Id: '{{ParseInput.FindingId}}'
-        ProductArn: '{{ParseInput.ProductArn}}'
+        - Id: '{{ParseInput.FindingId}}'
+          ProductArn: '{{ParseInput.ProductArn}}'
       Note:
-        Text: 'RDS DB Snapshot modified to private'
-        UpdatedBy: 'SHARR_Remediation_AFSBP_RDS.1'
+        Text: RDS DB Snapshot modified to private
+        UpdatedBy: SHARR_Remediation_AFSBP_RDS.1
     description: Update finding
     isEnd: true
