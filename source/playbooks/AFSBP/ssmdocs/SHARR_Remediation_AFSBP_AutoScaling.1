@@ -1,5 +1,5 @@
 description: |
-  ### Document Name - SHARR_Remediation_ASFBP_AutoScaling.1
+  ### Document Name - SHARR_Remediation_AFSBP_AutoScaling.1
 
   ## What does this document do?
   This document enables ELB healthcheck on a given AutoScaling Group using the [UpdateAutoScalingGroup] API.
@@ -53,7 +53,7 @@ mainSteps:
       Script: |-
         def parse_event(event, context):
           finding = event['Finding']
-          finding_id = finding['FindingId']
+          finding_id = finding['Id']
           product_arn = finding['ProductArn']
           asg = (finding['Resources'][0]['Id']).split('/')[-1]
           object = {'Type': 'AutoScalingGroup', 'Id': asg, 'OutputKey': 'VerifyASGHealthCheck.Response'}
@@ -127,6 +127,6 @@ mainSteps:
         ProductArn: '{{ParseInput.ProductArn}}'
       Note:
         Text: 'ASG health check type updated to ELB'
-        UpdatedBy: 'SHARR_Remediation_ASFBP_AutoScaling.1'
+        UpdatedBy: 'SHARR_Remediation_AFSBP_AutoScaling.1'
     description: Update finding
     isEnd: true

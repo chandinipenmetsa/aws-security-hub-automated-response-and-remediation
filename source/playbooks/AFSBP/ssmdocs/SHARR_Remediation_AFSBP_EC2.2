@@ -47,7 +47,7 @@ mainSteps:
       Script: |-
         def parse_event(event, context):
           finding = event['Finding']
-          finding_id = finding['FindingId']
+          finding_id = finding['Id']
           product_arn = finding['ProductArn']
           group_id = finding['Resources'][0]['Details']['AwsEc2SecurityGroup']['GroupId']
           object = {'Type': 'SecurityGroup', 'Id': group_id, 'OutputKey': 'RemoveRules.Output'}

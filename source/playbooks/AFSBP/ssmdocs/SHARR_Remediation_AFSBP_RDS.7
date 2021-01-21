@@ -1,5 +1,5 @@
 description: |
-  ### Document Name - SHARR_Remediation_ASFBP_RDS.7
+  ### Document Name - SHARR_Remediation_AFSBP_RDS.7
 
   ## What does this document do?
   This document enables `Deletion Protection` on a given Amazon RDS cluster by calling another SSM document.
@@ -48,7 +48,7 @@ mainSteps:
       Script: |-
         def parse_event(event, context):
           finding = event['Finding']
-          finding_id = finding['FindingId']
+          finding_id = finding['Id']
           product_arn = finding['ProductArn']
           resource_id = finding['Resources'][0]['Details']['AwsRdsDbCluster']['DbClusterResourceId']
           object = {'Type': 'RDSCluster', 'Id': resource_id, 'OutputKey': 'EnableRDSClusterDeletionProtection.Output'}
@@ -74,6 +74,6 @@ mainSteps:
         ProductArn: '{{ParseInput.ProductArn}}'
       Note:
         Text: 'Deletion protection enabled on RDS DB cluster'
-        UpdatedBy: 'SHARR_Remediation_ASFBP_RDS.7'
+        UpdatedBy: 'SHARR_Remediation_AFSBP_RDS.7'
     description: Update finding
     isEnd: true

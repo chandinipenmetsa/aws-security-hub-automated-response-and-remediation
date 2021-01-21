@@ -48,7 +48,7 @@ mainSteps:
       Script: |-
         def parse_event(event, context):
           finding = event['Finding']
-          finding_id = finding['FindingId']
+          finding_id = finding['Id']
           product_arn = finding['ProductArn']
           resource_id = finding['Resources'][0]['Details']['AwsRdsDbInstance']['DbiResourceId']
           object = {'Type': 'RDSDBInstance', 'Id': resource_id, 'OutputKey': 'EnableEnhancedMonitoring.Output'}

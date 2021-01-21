@@ -43,7 +43,7 @@ mainSteps:
       Script: |-
         def parse_event(event, context):
           finding = event['Finding']
-          finding_id = finding['FindingId']
+          finding_id = finding['Id']
           product_arn = finding['ProductArn']
           db_snapshot_identifier = finding['Resources'][0]['Details']['AwsRdsDbSnapshot']['DbSnapshotIdentifier']
           object = {'Type': 'RDSSnapshot', 'Id': db_snapshot_identifier, 'OutputKey': 'MakeRdsSnapshotPrivate.Response'}
