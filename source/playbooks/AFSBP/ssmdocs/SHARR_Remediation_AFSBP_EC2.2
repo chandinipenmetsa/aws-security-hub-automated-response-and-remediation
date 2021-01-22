@@ -9,11 +9,11 @@ description: |
   * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
 
   ## Output Parameters
-  * RemoveRules.Output - Output from AWSConfigRemediation-RemoveVPCDefaultSecurityGroupRules SSM doc
+  * Remediation.Output - Output from AWSConfigRemediation-RemoveVPCDefaultSecurityGroupRules SSM doc
 schemaVersion: '0.3'
 assumeRole: '{{ AutomationAssumeRole }}'
 outputs:
-  - RemoveRules.Output
+  - Remediation.Output
   - ParseInput.AffectedObject
 parameters:
   AutomationAssumeRole:
@@ -50,10 +50,10 @@ mainSteps:
           finding_id = finding['Id']
           product_arn = finding['ProductArn']
           group_id = finding['Resources'][0]['Details']['AwsEc2SecurityGroup']['GroupId']
-          object = {'Type': 'SecurityGroup', 'Id': group_id, 'OutputKey': 'RemoveRules.Output'}
+          object = {'Type': 'SecurityGroup', 'Id': group_id, 'OutputKey': 'Remediation.Output'}
           return {"group_id": group_id, "finding_id": finding_id, "product_arn": product_arn, "object": object}
     isEnd: false
-  - name: RemoveRules
+  - name: Remediation
     action: 'aws:executeAutomation'
     isEnd: false
     inputs:

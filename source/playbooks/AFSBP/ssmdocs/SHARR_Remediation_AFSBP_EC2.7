@@ -9,7 +9,7 @@ description: |
   * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
 
   ## Output Parameters
-  * EnableEbsEncryptionByDefault.Output - The standard HTTP response from the EnableEbsEncryptionByDefault API.
+  * Remediation.Output - The standard HTTP response from the EnableEbsEncryptionByDefault API.
 schemaVersion: "0.3"
 assumeRole: "{{ AutomationAssumeRole }}"
 parameters:
@@ -21,7 +21,7 @@ parameters:
     type: StringMap
     description: The input from Step function for RDS7 finding
 outputs:
-  - EnableEbsEncryptionByDefault.Output
+  - Remediation.Output
   - ParseInput.AffectedObject
 mainSteps:
   -
@@ -47,11 +47,11 @@ mainSteps:
           finding = event['Finding']
           finding_id = finding['Id']
           product_arn = finding['ProductArn']
-          object = {'Type': 'EBSEncryption', 'Id': 'EBSEncryptionByDefault', 'OutputKey': 'EnableEbsEncryptionByDefault.Output'}
+          object = {'Type': 'EBSEncryption', 'Id': 'EBSEncryptionByDefault', 'OutputKey': 'Remediation.Output'}
           return {"finding_id": finding_id, "product_arn": product_arn, "object": object}
     isEnd: false
   -
-    name: EnableEbsEncryptionByDefault
+    name: Remediation
     action: 'aws:executeAutomation'
     isEnd: false
     inputs:

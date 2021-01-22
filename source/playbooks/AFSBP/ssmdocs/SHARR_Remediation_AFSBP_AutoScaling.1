@@ -11,11 +11,11 @@ description: |
   * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
 
   ## Output Parameters
-  * VerifyASGHealthCheck.Response - Output of DescribeAutoScalingGroups API.
+  * Remediation.Output - Output of DescribeAutoScalingGroups API.
 schemaVersion: '0.3'
 assumeRole: '{{ AutomationAssumeRole }}'
 outputs:
-  - VerifyASGHealthCheck.Response
+  - Remediation.Output
   - ParseInput.AffectedObject
 parameters:
   Finding:
@@ -56,7 +56,7 @@ mainSteps:
           finding_id = finding['Id']
           product_arn = finding['ProductArn']
           asg = (finding['Resources'][0]['Id']).split('/')[-1]
-          object = {'Type': 'AutoScalingGroup', 'Id': asg, 'OutputKey': 'VerifyASGHealthCheck.Response'}
+          object = {'Type': 'AutoScalingGroup', 'Id': asg, 'OutputKey': 'Remediation.Output'}
           return {"asg": asg, "finding_id": finding_id, "product_arn": product_arn, "object": object}
     isEnd: false
   - name: EnableELBHealthCheck
@@ -72,16 +72,16 @@ mainSteps:
       - Name: Response
         Selector: $
         Type: StringMap
-  - name: VerifyASGHealthCheck
+  - name: Remediation
     action: 'aws:executeScript'
     outputs:
-      - Name: Response
+      - Name: Output
         Selector: $.Payload.response
         Type: StringMap
     inputs:
       InputPayload:
         AsgName: '{{ParseInput.AsgName}}'
-      Runtime: python3.6
+      Runtime: python3.7
       Handler: verify
       Script: |-
         import boto3

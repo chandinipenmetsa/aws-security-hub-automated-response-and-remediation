@@ -9,8 +9,7 @@ description: |
 schemaVersion: '0.3'
 assumeRole: '{{ AutomationAssumeRole }}'
 outputs:
-  - MakeRdsSnapshotPrivate.Response
-  - MakeRdsClusterSnapshotPrivate.Response
+  - Remediation.Output
   - ParseInput.AffectedObject
 parameters:
   Finding:
@@ -50,57 +49,53 @@ mainSteps:
           finding_id = finding['Id']
           product_arn = finding['ProductArn']
           resource_type = finding['Resources'][0]['Type']
-          object = {'Type': resource_type}
+          object = {'Type': resource_type, 'OutputKey': 'Remediation.Output'}
           if (resource_type == 'AwsRdsDbSnapshot'):
             db_snapshot_identifier = finding['Resources'][0]['Details']['AwsRdsDbSnapshot']['DbSnapshotIdentifier']
-            object['OutputKey'] = 'MakeRdsSnapshotPrivate.Response'
-            object['Id'] = db_snapshot_identifier
           elif (resource_type == 'AwsRdsDbClusterSnapshot'):
             db_snapshot_identifier = finding['Resources'][0]['Id'].split(':')[-1]
-            object['OutputKey'] = 'MakeRdsClusterSnapshotPrivate.Response'
-            object['Id'] = db_snapshot_identifier
+          object['Id'] = db_snapshot_identifier
           return {"type": resource_type, "db_snapshot_identifier": db_snapshot_identifier, "finding_id": finding_id, "product_arn": product_arn, "object": object}
-    nextStep: ChooseNextStep
-  - name: ChooseNextStep
-    action: 'aws:branch'
-    inputs:
-      Choices:
-        - NextStep: MakeRdsSnapshotPrivate
-          Variable: '{{ParseInput.Type}}'
-          StringEquals: AwsRdsDbSnapshot
-        - NextStep: MakeRdsClusterSnapshotPrivate
-          Variable: '{{ParseInput.Type}}'
-          StringEquals: AwsRdsDbClusterSnapshot
-      Default: MakeRdsSnapshotPrivate
-  - name: MakeRdsSnapshotPrivate
-    action: 'aws:executeAwsApi'
+    nextStep: Remediation
+  - name: Remediation
+    action: 'aws:executeScript'
     outputs:
-      - Name: Response
-        Selector: $
-        Type: StringMap
+    - Name: Output
+      Selector: $.Payload.response
+      Type: StringMap
     inputs:
-      Service: rds
-      Api: ModifyDBSnapshotAttribute
-      DBSnapshotIdentifier: '{{ParseInput.DBSnapshotIdentifier}}'
-      AttributeName: restore
-      ValuesToRemove:
-        - all
-    description: Make RDS Snapshot private by running ModifyDBSnapshotAttribute API
-    nextStep: UpdateFinding
-  - name: MakeRdsClusterSnapshotPrivate
-    action: 'aws:executeAwsApi'
-    outputs:
-      - Name: Response
-        Selector: $
-        Type: StringMap
-    inputs:
-      Service: rds
-      Api: ModifyDBClusterSnapshotAttribute
-      DBClusterSnapshotIdentifier: '{{ParseInput.DBSnapshotIdentifier}}'
-      AttributeName: restore
-      ValuesToRemove:
-        - all
-    description: Make RDS Cluster Snapshot private by running ModifyDBClusterSnapshotAttribute API
+      InputPayload: 
+        Type: '{{ParseInput.Type}}'
+        DbSnapshotId: '{{ParseInput.DBSnapshotIdentifier}}'
+      Runtime: python3.7
+      Handler: make_snapshot_private
+      Script: |-
+        import boto3
+        import json
+        from botocore.exceptions import ClientError
+        def make_snapshot_private(event, context):
+          rds_client = boto3.client('rds')
+          snapshot_id = event['DbSnapshotId']
+          snapshot_type = event['Type']
+          try:
+            if (snapshot_type == 'AwsRdsDbSnapshot'):
+              result = rds_client.modify_db_snapshot_attribute(
+                DBSnapshotIdentifier=snapshot_id,
+                AttributeName='restore',
+                ValuesToRemove=['all']
+              )
+            elif (snapshot_type == 'AwsRdsDbClusterSnapshot'):
+              result = rds_client.modify_db_cluster_snapshot_attribute(
+                DBClusterSnapshotIdentifier=snapshot_id,
+                AttributeName='restore',
+                ValuesToRemove=['all']
+              )
+            return {
+              "response": result
+            }
+          except Exception as e:
+            log.info(e)
+            exit(1)
     nextStep: UpdateFinding
   - name: UpdateFinding
     action: 'aws:executeAwsApi'
