@@ -176,7 +176,7 @@ mainSteps:
                 raise
               try:
                 ssm_client.put_parameter(
-                  Name='/Solutions/SO0111/CMK_CloudTrail.1_ARN',
+                  Name='/Solutions/SO0111/CMK_CloudTrail.2_ARN',
                   Value=kms_key_arn,
                   Type='String'
                 )
