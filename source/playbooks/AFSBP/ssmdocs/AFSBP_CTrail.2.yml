@@ -1,0 +1,213 @@
+description: |
+  ### Document Name - SHARR_Remediation_ClouTrail.2
+
+  ## What does this document do?
+  This document enables SSE KMS encryption for log files; creates KMS key if one with given name doesn't exist
+
+  ## Input Parameters
+  * Finding: (Required) Security Hub finding details JSON
+  * AutomationAssumeRole: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+
+  ## Output Parameters
+  * Remediation.Output - Output from UpdateTrail API
+schemaVersion: '0.3'
+assumeRole: '{{ AutomationAssumeRole }}'
+outputs:
+  - Remediation.Output
+  - ParseInput.AffectedObject
+parameters:
+  AutomationAssumeRole:
+    type: String
+    description: (Required) The ARN of the role that allows Automation to perform the actions on your behalf.
+    allowedPattern: '^arn:(aws[a-zA-Z-]*)?:iam::\d{12}:role/[\w+=,.@-]+'
+  Finding:
+    type: StringMap
+    description: The input from Step function for EC2.2 finding
+mainSteps:
+  - name: ParseInput
+    action: 'aws:executeScript'
+    outputs:
+      - Name: TrailArn
+        Selector: $.Payload.trail_arn
+        Type: String
+      - Name: TrailRegion
+        Selector: $.Payload.trail_region
+        Type: String
+      - Name: Account
+        Selector: $.Payload.account
+        Type: String
+      - Name: FindingId
+        Selector: $.Payload.finding_id
+        Type: String
+      - Name: ProductArn
+        Selector: $.Payload.product_arn
+        Type: String
+      - Name: AffectedObject
+        Selector: $.Payload.object
+        Type: StringMap
+    inputs:
+      InputPayload:
+        Finding: '{{Finding}}'
+      Runtime: python3.6
+      Handler: parse_event
+      Script: |-
+        def parse_event(event, context):
+          finding = event['Finding']
+          finding_id = finding['Id']
+          product_arn = finding['ProductArn']
+          trail_arn = finding['Resources'][0]['Id']
+          account = finding['Resources'][0]['Id'].split(':')[4]
+          trail_region = finding['Resources'][0]['Id'].split(':')[3]
+          object = {'Type': 'CloudTrail', 'Id': trail_arn, 'OutputKey': 'Remediation.Output'}
+          return {"trail_arn": trail_arn, "trail_region": trail_region, "account": account, "finding_id": finding_id, "product_arn": product_arn, "object": object}
+    isEnd: false
+  - name: Remediation
+    action: 'aws:executeScript'
+    outputs:
+      - Name: Output
+        Selector: $.Payload.response
+        Type: StringMap
+    inputs:
+      InputPayload:
+        trail_region: '{{ParseInput.TrailRegion}}'
+        account: '{{ParseInput.Account}}'
+        trail: '{{ParseInput.TrailArn}}'
+        automation_role: '{{ AutomationAssumeRole }}'
+      Runtime: python3.7
+      Handler: enable_trail_encryption
+      Script: |-
+        import boto3
+        import json
+        from botocore.exceptions import ClientError
+        def enable_trail_encryption(event, context):
+          """
+          remediates CloudTrail.2 by enabling SSE-KMS
+          On success returns a string map
+          On failure returns NoneType
+          """
+          ssm_client = boto3.client('ssm', region_name=event['trail_region'])
+          kms_client = boto3.client('kms', region_name=event['trail_region'])
+          ctrail_client = boto3.client('cloudtrail', region_name=event['trail_region'])
+          kms_key_arn = ''
+          try:
+            ssm_param = ssm_client.get_parameter(
+              Name='/Solutions/SO0111/CMK_CloudTrail.1_ARN'
+            )
+            kms_key_arn = ssm_param['Parameter']['Value']
+            print("KMS Key ARN: {}".format(kms_key_arn))
+          except ClientError as e:
+            if (e.response['Error']['Code'] == 'ParameterNotFound'):
+              print("KMS key ARN not found in SSM")
+              print("Creating KMS CMK")
+              try:
+                account = event['account']
+                policy = {
+                  "Version": "2012-10-17",
+                  "Statement": [
+                    {
+                      "Sid": "Enable IAM user permissions",
+                      "Effect": "Allow",
+                      "Principal": {
+                        "AWS": [
+                          "arn:aws:iam::{}:root".format(account),
+                          event['automation_role']
+                          ]
+                        },
+                      "Action": "kms:*",
+                      "Resource": "*"
+                    },
+                    {
+                      "Sid": "Enable CloudTrail to encrypt and decrypt logs",
+                      "Effect": "Allow",
+                      "Principal": {
+                        "Service": ["cloudtrail.amazonaws.com"]
+                        },
+                      "Action": [
+                        "kms:GenerateDataKey*"
+                      ],
+                      "Resource": "*",
+                      "Condition": {
+                        "StringLike": {
+                          "kms:EncryptionContext:aws:cloudtrail:arn": "arn:aws:cloudtrail:*:{}:trail/*".format(account)
+                        }
+                      }
+                    },
+                    {
+                      "Sid": "Enable CloudTrail to describe key",
+                      "Effect": "Allow",
+                      "Principal": {
+                        "Service": ["cloudtrail.amazonaws.com"]
+                        },
+                      "Action": [
+                        "kms:DescribeKey"
+                      ],
+                      "Resource": "*"
+                    },
+                    {
+                      "Sid": "Allow principals in account to decrypt log files",
+                      "Effect": "Allow",
+                      "Principal": {
+                        "AWS": "*"
+                        },
+                      "Action": [
+                        "kms:Decrypt",
+                        "kms:ReEncryptFrom"
+                      ],
+                      "Resource": "*",
+                      "Condition": {
+                        "StringLike": {
+                          "kms:EncryptionContext:aws:cloudtrail:arn": "arn:aws:cloudtrail:*:{}:trail/*".format(account)
+                        },
+                        "StringEquals": {"kms:CallerAccount": account}
+                      }
+                    }
+                  ]
+                }
+                print(policy)
+                kms_key = kms_client.create_key(
+                  Description='KMS CMK for CloudTrail.2 remediation',
+                  Policy=json.dumps(policy)
+                )
+                kms_key_arn = kms_key['KeyMetadata']['Arn']
+                print("KMS Key ARN: {}".format(kms_key_arn))
+              except Exception as e:
+                print(e)
+                print("Failed creating KMS key")
+                raise
+              try:
+                ssm_client.put_parameter(
+                  Name='/Solutions/SO0111/CMK_CloudTrail.1_ARN',
+                  Value=kms_key_arn,
+                  Type='String'
+                )
+              except Exception as e:
+                print(e)
+                print("Failed storing KMS key Arn in SSM")
+                raise
+          try:
+            result = ctrail_client.update_trail(
+              Name=event['trail'],
+              KmsKeyId=kms_key_arn
+            )
+            print("Result: {}".format(result))
+            return {
+              "response": result
+            }
+          except Exception as e:
+            print(e)
+            print('Error enabling SSE-KMS encryption')
+            raise
+    nextStep: UpdateFinding
+  - name: UpdateFinding
+    action: 'aws:executeAwsApi'
+    inputs:
+      Service: securityhub
+      Api: BatchUpdateFindings
+      FindingIdentifiers:
+        - Id: '{{ParseInput.FindingId}}'
+          ProductArn: '{{ParseInput.ProductArn}}'
+      Note:
+        Text: Removed rules on default security group
+        UpdatedBy: SHARR_Remediation_AFSBP_EC2.2
+    description: Update finding
+    isEnd: true
